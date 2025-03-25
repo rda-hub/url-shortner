@@ -1,9 +1,13 @@
+import datetime
+import os
 import sqlite3
 
 
 class DatabaseManager:
-    def __init__(self, db_path='data/urls.db'):
-        self.conn = sqlite3.connect(db_path)
+    def __init__(self):
+        self.db_path = os.path.join(os.path.dirname(__file__), '..', '..', 'data', 'urls.db')
+        self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
+        self.conn.execute('PRAGMA journal_mode=WAL;')
         self.init_db()
 
     def init_db(self):
@@ -28,19 +32,42 @@ class DatabaseManager:
 
     def get_url(self, short_code):
         # Retrieve a URL from the database
-        with self.conn:
-            cursor = self.conn.execute('SELECT long_url, expiry FROM urls WHERE short_code = ?',
-                                       (short_code,))
-            return cursor.fetchone()
+        cursor = self.conn.cursor()
+        cursor.execute('SELECT long_url, expiry FROM urls WHERE short_code = ?', (short_code,))
+        result = cursor.fetchone()
+
+        print(f"DEBUG: Checking short code '{short_code}' → Found: {result}")
+
+        if result:
+            long_url = result[0]
+            expiry = result[1] if result[1] is not None else None
+            if expiry and datetime.datetime.fromisoformat(expiry) < datetime.datetime.now():
+                return None, expiry
+            return long_url, expiry
+        return None, None
 
     def url_exists(self, long_url):
         # Check if a URL already exists in the database
-        with self.conn:
-            cursor = self.conn.execute('SELECT short_code FROM urls WHERE long_url = ?',
-                                       (long_url,))
-            result = cursor.fetchone()
-            return result[0] if result else None
+        cursor = self.conn.cursor()
+        cursor.execute('SELECT short_code FROM urls WHERE long_url = ?', (long_url,))
+        result = cursor.fetchone()
+        print(f"DEBUG: Checking if long URL exists '{long_url}' → Found: {result}")  # Debugging line
+
+        return result[0] if result else None
 
     def close(self):
-        # Close the database connection
-        self.conn.close()
+        """Close the database connection explicitly."""
+        if self.conn:
+            self.conn.close()
+            self.conn = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        if self.conn:
+            if exc_type is None:
+                self.conn.commit()
+            else:
+                self.conn.rollback()
+
