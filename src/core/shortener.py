@@ -67,7 +67,9 @@ class Shortener:
         if not isinstance(custom_code, str) or not custom_code.strip():
             return False
         pattern = r'^[a-zA-Z0-9]{3,10}$'
-        return bool(re.match(pattern, custom_code))
+        result = bool(re.match(pattern, custom_code))
+        print(f"Validating '{custom_code}': {result}")
+        return result
 
     def shorten_url(self, long_url, expiry=None, custom_code=None):
         # Shorten the URL
@@ -78,7 +80,7 @@ class Shortener:
             if custom_code:
                 if not self.is_custom_code_valid(custom_code):
                     raise ValueError(f"Invalid custom code '{custom_code}'")
-                if db.get_url(custom_code)[0] is not None:
+                if db.get_url(custom_code) is not None:
                     raise ValueError(f"Custom code '{custom_code}' is already in use")
                 short_code = custom_code
             else:
@@ -87,8 +89,8 @@ class Shortener:
                     return existing_code
                 for _ in range(10):
                     short_code = generate_short_code()
-                    if db.get_url(short_code)[0] is None:
-                        print("Short code not present in DB. So goint to insert now!!")
+                    if db.get_url(short_code) is None:
+                        print("Short code not present in DB. So going to insert now!!")
                         break
                 else:
                     print("WARNING: Switching to UUID-based fallback for unique code generation")
